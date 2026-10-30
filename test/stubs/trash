@@ -1,0 +1,4 @@
+#!/bin/bash
+# Stand-in for macOS trash: moves files into a directory inside the test's temp dir
+mkdir -p "$TRASH_DIR"
+for f in "$@"; do mv "$f" "$TRASH_DIR/"; done

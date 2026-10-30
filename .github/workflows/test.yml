@@ -1,0 +1,26 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+# Tests only read the repository; no write access is needed
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      # Pinned to a commit rather than a tag, which can be moved
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install tools
+        run: brew install fzf jq ripgrep bats-core shellcheck
+      - name: ShellCheck
+        run: |
+          shellcheck cch
+          shellcheck -s bash test/test_helper.bash
+      - name: Tests
+        run: bats test/

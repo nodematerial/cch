@@ -1,0 +1,5 @@
+#!/bin/bash
+# Stand-in for the claude CLI: records the arguments and input, and prints a canned reply
+echo "$*" > "$CLAUDE_STUB_ARGS"
+cat > "$CLAUDE_STUB_LOG"
+printf '%b' "${CLAUDE_STUB_OUTPUT:-}"
