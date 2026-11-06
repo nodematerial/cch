@@ -15,6 +15,7 @@ Claude Code stores conversations per launch directory, so once you work in sever
 ## Features
 
 - **Cross-project list and resume**: press Enter to `cd` into the conversation's directory and run `claude -r`.
+- **Content search**: switch to content with ctrl-t, or open with `cch <word>`, to find conversations whose title, your prompts or Claude's replies contain the word. Images, tool calls and results, and texts over 10,000 characters (such as whole pages pasted in) are not searched.
 - **AI summaries in the preview**: `cch summarize` (or ctrl-s in the list) writes a 2–3 line summary for each conversation and shows it in the preview, with a progress bar while it runs.
 - **Cost and context size**: shown dimly to the right of each title — API-equivalent cost (including subagents) and the latest context size.
 - **Rename and delete**: rename using the same format as Claude Code's `/rename`; delete moves files to the Trash.
