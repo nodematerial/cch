@@ -1,7 +1,7 @@
 #!/bin/bash
 # List Claude Code conversations across all projects and resume the selected one in its directory
 #   cch                    list all conversations, newest first
-#   cch <word>             only conversations whose content contains <word>
+#   cch <word>             open with the conversations whose content contains <word>
 #   cch -p [word]          print the list without opening fzf
 #   cch summarize [count]  summarize conversations with no or stale summary, newest first (default 20, or all)
 #   cch lang               choose the display language (en / ja / zh)
@@ -89,7 +89,7 @@ case "$CCH_LANG" in
     T_SUMMARIZE_CONFIRM="要約のない・古い会話が %s 件あります。要約しますか？（モデル: %s）\n(Enter/y: 直近 %s 件 / all: すべて %s 件 / ほかの入力: 中止): "
     T_BAD_COUNT="件数には数字か all を指定してください"
     T_DIR_MISSING="ディレクトリがありません（worktree を消した可能性）"
-    CCH_P_TITLE="タイトル> "; CCH_P_DATE="日付> "; CCH_P_DIR="dir> "
+    CCH_P_TITLE="タイトル> "; CCH_P_CONTENT="本文> "; CCH_P_DATE="日付> "; CCH_P_DIR="dir> "
     CCH_L_SUMMARY="[要約]"; CCH_L_LAST_PROMPT="[最後の指示]"
     ;;
   zh)
@@ -109,7 +109,7 @@ case "$CCH_LANG" in
     T_SUMMARIZE_CONFIRM="有 %s 个对话没有摘要或摘要已过时。要生成摘要吗？（模型: %s）\n(Enter/y: 最近 %s 个 / all: 全部 %s 个 / 其他输入: 取消): "
     T_BAD_COUNT="数量请指定数字或 all"
     T_DIR_MISSING="目录不存在（worktree 可能已被删除）"
-    CCH_P_TITLE="标题> "; CCH_P_DATE="日期> "; CCH_P_DIR="目录> "
+    CCH_P_TITLE="标题> "; CCH_P_CONTENT="内容> "; CCH_P_DATE="日期> "; CCH_P_DIR="目录> "
     CCH_L_SUMMARY="[摘要]"; CCH_L_LAST_PROMPT="[最后的指令]"
     ;;
   *)
@@ -129,12 +129,12 @@ case "$CCH_LANG" in
     T_SUMMARIZE_CONFIRM="%s conversations have no or a stale summary. Summarize them? (model: %s)\n(Enter/y: latest %s / all: all %s / anything else: cancel): "
     T_BAD_COUNT="The count must be a number or all"
     T_DIR_MISSING="Directory not found (the worktree may have been removed)"
-    CCH_P_TITLE="title> "; CCH_P_DATE="date> "; CCH_P_DIR="dir> "
+    CCH_P_TITLE="title> "; CCH_P_CONTENT="content> "; CCH_P_DATE="date> "; CCH_P_DIR="dir> "
     CCH_L_SUMMARY="[Summary]"; CCH_L_LAST_PROMPT="[Last prompt]"
     ;;
 esac
 # Used inside fzf preview and bindings, which run in child processes
-export CCH_P_TITLE CCH_P_DATE CCH_P_DIR CCH_L_SUMMARY CCH_L_LAST_PROMPT
+export CCH_P_TITLE CCH_P_CONTENT CCH_P_DATE CCH_P_DIR CCH_L_SUMMARY CCH_L_LAST_PROMPT
 
 show_help() {
   case "$CCH_LANG" in
@@ -142,7 +142,7 @@ show_help() {
 使い方: cch [コマンド | 語句]
 
   cch                    全リポジトリの会話を新しい順に一覧し、選んだ会話を再開する
-  cch <語句>             会話の本文に語句を含むものだけ一覧する
+  cch <語句>             本文で絞り込んだ状態で開く（本文に語句を含む会話だけ）
   cch -p [語句]          fzf を開かず一覧だけ出力する
   cch summarize [件数]   要約がない・古い会話を新しい順に要約する（既定 20 件、all ですべて）
   cch lang               表示の言語を選び直す（en / ja / zh）
@@ -151,7 +151,7 @@ show_help() {
 
 一覧でのキー:
   Enter   再開
-  ctrl-t  絞り込む対象を切り替える（タイトル → 日付 → dir）
+  ctrl-t  絞り込む対象を切り替える（タイトル → 本文 → 日付 → dir）
   ctrl-r  名前を変える
   ctrl-x  ゴミ箱に移す（確認あり）
   ctrl-s  要約のない会話を要約する（確認あり）
@@ -163,7 +163,7 @@ EOF
 用法: cch [命令 | 词语]
 
   cch                    按时间从新到旧列出所有项目的对话，并恢复选中的对话
-  cch <词语>             只列出内容中包含该词语的对话
+  cch <词语>             以内容筛选的状态打开（只列出包含该词语的对话）
   cch -p [词语]          不打开 fzf，只输出列表
   cch summarize [数量]   为没有摘要或摘要已过时的对话生成摘要（默认 20 个，all 为全部）
   cch lang               重新选择显示语言（en / ja / zh）
@@ -172,7 +172,7 @@ EOF
 
 列表中的按键:
   Enter   恢复
-  ctrl-t  切换筛选对象（标题 → 日期 → 目录）
+  ctrl-t  切换筛选对象（标题 → 内容 → 日期 → 目录）
   ctrl-r  重命名
   ctrl-x  移到废纸篓（会先确认）
   ctrl-s  为没有摘要的对话生成摘要（会先确认）
@@ -184,7 +184,7 @@ EOF
 Usage: cch [command | word]
 
   cch                    list conversations across all projects, newest first, and resume the selected one
-  cch <word>             only list conversations whose content contains <word>
+  cch <word>             open filtered by content (only conversations that contain <word>)
   cch -p [word]          print the list without opening fzf
   cch summarize [count]  summarize conversations with no or stale summary, newest first (default 20, or all)
   cch lang               choose the display language again (en / ja / zh)
@@ -193,7 +193,7 @@ Usage: cch [command | word]
 
 Keys in the list:
   Enter   resume
-  ctrl-t  cycle the filter field (title -> date -> dir)
+  ctrl-t  cycle the filter field (title -> content -> date -> dir)
   ctrl-r  rename
   ctrl-x  move to Trash (asks first)
   ctrl-s  summarize conversations without a summary (asks first)
@@ -282,9 +282,12 @@ summarize() {
 
   # Run the summarizer in the cache dir so it does not pick up a project's CLAUDE.md
   cd "$CCH_CACHE_DIR"
+  # claude catches Ctrl-C and exits normally, so without this the loop would go on to the next conversation.
+  # Stop the whole run instead, and re-raise the signal so the caller sees the interruption
+  trap '[ -t 2 ] && printf "\r\033[K" >&2; trap - INT; kill -INT $$' INT
   local started=$SECONDS
   for f in "${targets[@]}"; do
-    local id out dialogue title
+    local id out dialogue title reply
     id=$(basename "$f" .jsonl)
     out="$SUMMARY_DIR/$id.txt"
     title=$(session_title "$f")
@@ -305,16 +308,16 @@ summarize() {
 ${dialogue: -22000}"
     fi
     # Pin the role in the system prompt and wrap the transcript in tags, so the model summarizes it instead of replying to it
-    if printf '<transcript>\n%s\n</transcript>\n\n%s\n' "$dialogue" "$T_SUMMARY_REQUEST" \
+    # claude exits 0 even when the run fails or is interrupted (printing "Execution error"), so judge by is_error in the JSON result
+    reply=$(printf '<transcript>\n%s\n</transcript>\n\n%s\n' "$dialogue" "$T_SUMMARY_REQUEST" \
       | claude -p --model "$SUMMARY_MODEL" --no-session-persistence --tools "" \
-        --system-prompt "$T_SUMMARY_SYSTEM" \
-        > "$out.tmp"; then
+        --system-prompt "$T_SUMMARY_SYSTEM" --output-format json \
+      | jq -r 'select(.is_error == false) | .result // empty' 2>/dev/null || true)
+    if [ -n "$reply" ]; then
       # Normalize to 2-3 bullet lines even if the model drifts from the format
-      sed -E 's/^[[:space:]]*([-*•・]|[0-9]+[.)])[[:space:]]*//; /^[[:space:]]*$/d' "$out.tmp" \
+      printf '%s\n' "$reply" | sed -E 's/^[[:space:]]*([-*•・]|[0-9]+[.)])[[:space:]]*//; /^[[:space:]]*$/d' \
         | sed "s/^/$T_BULLET/" | head -3 > "$out"
-      rm -f "$out.tmp"
     else
-      rm -f "$out.tmp"
       [ -t 2 ] && printf '\r\033[K' >&2
       echo "  $title: $T_SUMMARY_FAILED" >&2
     fi
@@ -344,8 +347,31 @@ json_field() {
 list_sessions() {
   local files
   if [ -n "$QUERY" ]; then
-    # ripgrep is about 10x faster than grep on hundreds of MB of transcripts
-    files=$(rg -l -F --no-messages -- "$QUERY" "$PROJECTS_DIR"/*/*.jsonl || true)
+    # A raw match is often inside tool output or base64 of pasted images and PDFs, so keep a file only
+    # when the word is in a title or in the text of a prompt or reply. Images are never searched, and neither is
+    # a text over 10000 characters, which is usually a whole page pasted in rather than the user's own words.
+    # One pass over all files: ripgrep (about 10x faster than grep here) prints the matching lines after their
+    # file name and a NUL. perl cheaply drops what cannot hold dialogue, so the bulk never reaches jq:
+    # lines of other types, tool calls and tool results (each content block has its own line), and matches
+    # only inside base64 strings (long runs with no spaces). jq then checks the text fields of what is left
+    files=$(rg -F --null --no-messages -- "$QUERY" "$PROJECTS_DIR"/*/*.jsonl \
+      | Q="$QUERY" perl -ne '
+          next unless /"type":"(?:user|assistant|custom-title|ai-title)"/;
+          next if /"type":"tool_(?:use|result)"/;
+          my ($f, $l) = split /\0/, $_, 2;
+          $l =~ s{"[A-Za-z0-9+/=]{200,}"}{""}g;
+          next if index($l, $ENV{Q}) < 0;
+          chomp $l; $f =~ s/(["\\])/\\$1/g;
+          print qq({"f":"$f","l":$l}\n);' \
+      | jq -Rr --arg q "$QUERY" '
+          def texts: if type == "string" then . else (.[] | select(.type == "text") | .text) end;
+          fromjson? | .f as $f | .l
+          | if .type == "custom-title" then .customTitle
+            elif .type == "ai-title" then .aiTitle
+            elif (.type == "user" or .type == "assistant") and .isMeta != true then (.message.content | texts)
+            else empty end
+          | strings | select(length <= 10000 and contains($q)) | $f' \
+      | sort -u || true)
   else
     files=$(ls "$PROJECTS_DIR"/*/*.jsonl 2>/dev/null || true)
   fi
@@ -592,7 +618,8 @@ last_prompt() {
 
 # Internal commands invoked from fzf key bindings
 case "${1:-}" in
-  __list) QUERY="${CCH_QUERY:-}"; list_sessions | format_rows; exit 0 ;;
+  # In the content field the query is the search word; in the other fields fzf filters the full list itself
+  __list) QUERY=""; [ "${FZF_PROMPT:-}" = "$CCH_P_CONTENT" ] && QUERY="${FZF_QUERY:-}"; list_sessions | format_rows; exit 0 ;;
   __rename) rename_session "$2"; exit 0 ;;
   __delete) delete_session "$2"; exit 0 ;;
   __summarize) summarize_from_list; exit 0 ;;
@@ -607,19 +634,31 @@ fi
 
 
 SELF="$0"
-export CCH_QUERY="$QUERY"
+export CCH_SELF="$SELF"
 
 # Build the list before opening fzf so a long first run can show a progress bar
 rows=$(CCH_SHOW_PROGRESS=1 list_sessions | format_rows)
 
+# Opened with a word, start in the content field with the word in the query
+start_opts=(--prompt="$CCH_P_TITLE")
+[ -n "$QUERY" ] && start_opts=(--prompt="$CCH_P_CONTENT" --query="$QUERY" --disabled)
+
 # fzf runs preview and binding commands with $SHELL; force bash because the commands use bash syntax.
-# $FZF_NTH and $CCH_P_* in the ctrl-t binding are expanded by that shell, not here
+# $FZF_PROMPT, $CCH_P_* and $CCH_SELF in the ctrl-t and change bindings are expanded by that shell, not here.
+# ctrl-t cycles title -> content -> date -> dir. The content field turns off fzf's own filtering and searches
+# the conversations again on every change of the query; the prompt tells __list which field is active
 # shellcheck disable=SC2016
 selected=$(printf '%s\n' "$rows" | SHELL=/bin/bash fzf \
   --ansi --delimiter=$'\t' --with-nth=1,2,3,4 --tabstop=8 \
-  --nth=3 --prompt="$CCH_P_TITLE" \
+  --nth=3 "${start_opts[@]}" \
   --header="$T_HEADER" \
-  --bind='ctrl-t:change-nth(1|2|3)+transform-prompt(case $FZF_NTH in 1) echo "$CCH_P_DATE";; 2) echo "$CCH_P_DIR";; *) echo "$CCH_P_TITLE";; esac)' \
+  --bind='ctrl-t:transform:case $FZF_PROMPT in
+      "$CCH_P_TITLE") echo "change-prompt($CCH_P_CONTENT)+disable-search+reload(\"$CCH_SELF\" __list)" ;;
+      "$CCH_P_CONTENT") echo "change-prompt($CCH_P_DATE)+change-nth(1)+enable-search+clear-query+reload(\"$CCH_SELF\" __list)" ;;
+      "$CCH_P_DATE") echo "change-prompt($CCH_P_DIR)+change-nth(2)" ;;
+      *) echo "change-prompt($CCH_P_TITLE)+change-nth(3)" ;;
+    esac' \
+  --bind='change:transform:[ "$FZF_PROMPT" = "$CCH_P_CONTENT" ] && echo "reload(\"$CCH_SELF\" __list)" || true' \
   --bind="ctrl-r:execute('$SELF' __rename {6})+reload('$SELF' __list)" \
   --bind="ctrl-x:execute('$SELF' __delete {6})+reload('$SELF' __list)" \
   --bind="ctrl-s:execute('$SELF' __summarize)+reload('$SELF' __list)+refresh-preview" \

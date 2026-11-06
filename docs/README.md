@@ -51,7 +51,7 @@ ln -s "$PWD/cch/cch" /usr/local/bin/cch   # any directory on your PATH works
 
 ```sh
 cch                   # list all conversations, newest first
-cch <word>            # only conversations whose content contains <word>
+cch <word>            # open filtered by content: only conversations that contain <word>
 cch -p [word]         # print the list without opening fzf
 cch summarize [count] # summarize conversations with no or stale summary, newest first (default 20, or all)
 cch lang              # choose the display language (en / ja / zh)
@@ -72,7 +72,7 @@ cch --version         # show the version
 | Key | Action |
 |---|---|
 | Enter | Resume the conversation |
-| ctrl-t | Cycle the filter target: title → date → dir |
+| ctrl-t | Cycle the filter target: title → content → date → dir. In content, the typed word searches the conversations again |
 | ctrl-r | Rename (Esc to cancel) |
 | ctrl-x | Move to Trash (Enter / y to confirm, any other key cancels) |
 | ctrl-s | Summarize conversations without a summary: Enter/y for the latest 20, type `all` for all |

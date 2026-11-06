@@ -1,5 +1,20 @@
 #!/bin/bash
-# Stand-in for the claude CLI: records the arguments and input, and prints a canned reply
+# Stand-in for the claude CLI: records the arguments and input, and prints a canned reply as a JSON result
+#   CLAUDE_STUB_OUTPUT  reply text (backslash escapes are expanded)
+#   CLAUDE_STUB_ERROR   when 1, report a failed run, as claude does with exit status 0
+#   CLAUDE_STUB_READY   when set, the first call touches this file and waits for Ctrl-C, then fails the way claude does
 echo "$*" > "$CLAUDE_STUB_ARGS"
+echo call >> "$CLAUDE_STUB_ARGS.calls"
 cat > "$CLAUDE_STUB_LOG"
-printf '%b' "${CLAUDE_STUB_OUTPUT:-}"
+fail() {
+  jq -cn '{type: "result", subtype: "error_during_execution", is_error: true, result: null}'
+  exit 0
+}
+# Only the first call waits, so a cch that goes on after Ctrl-C fails the test instead of hanging it
+if [ -n "${CLAUDE_STUB_READY:-}" ] && [ ! -f "$CLAUDE_STUB_READY" ]; then
+  trap fail INT
+  touch "$CLAUDE_STUB_READY"
+  while :; do sleep 0.1; done
+fi
+[ "${CLAUDE_STUB_ERROR:-0}" = 1 ] && fail
+jq -cn --arg r "$(printf '%b' "${CLAUDE_STUB_OUTPUT:-}")" '{type: "result", subtype: "success", is_error: false, result: $r}'

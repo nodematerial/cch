@@ -112,6 +112,52 @@ load test_helper
   [[ "$output" != *"Trains"* ]] || false
 }
 
+@test "reloading the list searches the content only in the content field" {
+  a=$(new_session "$HOME/workspace/api" "talk about pineapples")
+  add_title "$a" "Fruit"
+  b=$(new_session "$HOME/workspace/web" "talk about trains")
+  add_title "$b" "Trains"
+
+  # fzf passes the prompt and the query to reload commands
+  run env FZF_PROMPT="content> " FZF_QUERY=pineapples "$CCH" __list
+  [[ "$output" == *"Fruit"* ]] || false
+  [[ "$output" != *"Trains"* ]] || false
+
+  run env FZF_PROMPT="title> " FZF_QUERY=pineapples "$CCH" __list
+  [[ "$output" == *"Fruit"* ]] || false
+  [[ "$output" == *"Trains"* ]] || false
+}
+
+@test "a search word in tool output or pasted image data does not count" {
+  a=$(new_session "$HOME/workspace/api" "look at this")
+  add_title "$a" "Only in tool output"
+  echo '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"PINEAPPLE"}]}}' >> "$a"
+  b=$(new_session "$HOME/workspace/web" "look at this")
+  add_title "$b" "Only in an image"
+  echo '{"type":"user","message":{"role":"user","content":[{"type":"image","source":{"type":"base64","data":"xxPINEAPPLExx"}}]}}' >> "$b"
+  c=$(new_session "$HOME/workspace/cli" "and this")
+  add_title "$c" "In a reply"
+  add_reply "$c" msg_1 10 10 "PINEAPPLE it is"
+  d=$(new_session "$HOME/workspace/ml" "and this")
+  add_title "$d" "PINEAPPLE in the title"
+
+  e=$(new_session "$HOME/workspace/doc" "and this")
+  add_title "$e" "Only in a long paste"
+  long=$(printf 'x%.0s' $(seq 10000))
+  jq -cn --arg t "PINEAPPLE $long" '{type: "user", message: {role: "user", content: [{type: "text", text: $t}]}}' >> "$e"
+  f=$(new_session "$HOME/workspace/img" "and this")
+  add_title "$f" "Next to an image"
+  echo '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"see PINEAPPLE"},{"type":"image","source":{"type":"base64","data":"xxPINEAPPLExx"}}]}}' >> "$f"
+
+  run "$CCH" -p PINEAPPLE
+  [[ "$output" == *"Next to an image"* ]] || false
+  [[ "$output" != *"Only in a long paste"* ]] || false
+  [[ "$output" == *"In a reply"* ]] || false
+  [[ "$output" == *"PINEAPPLE in the title"* ]] || false
+  [[ "$output" != *"Only in tool output"* ]] || false
+  [[ "$output" != *"Only in an image"* ]] || false
+}
+
 @test "summarize sends only the dialogue and normalizes the reply to at most 3 bullets" {
   f=$(new_session "$HOME/workspace/api" "please fix the bug")
   add_reply "$f" msg_1 10 10 "fixed it"
@@ -291,6 +337,31 @@ summary_count() {
   make_unsummarized 1
   "$CCH" summarize > /dev/null
   [[ "$(cat "$CLAUDE_STUB_ARGS")" == *"--model claude-haiku-4-5"* ]] || false
+}
+
+@test "a failed run is not saved as a summary, although claude exits 0" {
+  make_unsummarized 1
+  export CLAUDE_STUB_ERROR=1
+  run "$CCH" summarize
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"failed to summarize"* ]] || false
+  [ "$(summary_count)" -eq 0 ]
+}
+
+@test "Ctrl-C stops summarizing instead of going on to the next conversation" {
+  make_unsummarized 3
+  export CLAUDE_STUB_READY="$BATS_TEST_TMPDIR/ready"
+  # Run in its own process group, like a job in a terminal, so Ctrl-C reaches cch and claude together.
+  # Background jobs start with SIGINT ignored, so restore the default first
+  perl -e '$SIG{INT} = "DEFAULT"; setpgrp(0, 0); exec @ARGV' "$CCH" summarize > /dev/null 2>&1 &
+  pid=$!
+  for _ in $(seq 100); do [ -f "$CLAUDE_STUB_READY" ] && break; sleep 0.1; done
+  kill -INT -- -"$pid"
+  rc=0
+  wait "$pid" || rc=$?
+  [ "$rc" -eq 130 ]
+  [ "$(wc -l < "$CLAUDE_STUB_ARGS.calls" | tr -d ' ')" -eq 1 ]
+  [ "$(summary_count)" -eq 0 ]
 }
 
 @test "without a terminal, summarize prints one line per conversation instead of a bar" {
