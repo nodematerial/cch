@@ -9,7 +9,7 @@
 #   cch --version          show the version
 set -eu
 
-CCH_VERSION="0.1.0"
+CCH_VERSION="0.2.0"
 
 # Runs before the language is chosen (the chooser itself needs fzf), so messages are English only
 check_deps() {
