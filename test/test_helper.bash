@@ -50,5 +50,6 @@ add_custom_title() {
 
 # set_age <file> <minutes ago>
 set_age() {
-  touch -t "$(date -v-"$2"M '+%Y%m%d%H%M.%S')" "$1"
+  # date -v (BSD) and date -d (GNU) differ, so let perl set the time
+  perl -e '$t = time - $ARGV[0] * 60; utime $t, $t, $ARGV[1] or die "$ARGV[1]: $!\n"' "$2" "$1"
 }

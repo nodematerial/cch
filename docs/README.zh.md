@@ -24,14 +24,16 @@ Claude Code 按启动目录分别保存对话，仓库一多，过去的对话�
 
 ## 运行要求
 
-- macOS（使用了 `stat -f`、`tail -r` 和 `trash`；暂不支持 Linux）
-- bash、perl、curl（macOS 自带）
-- [fzf](https://github.com/junegunn/fzf)（已在 0.65 上测试）
+- macOS，或装有 GNU coreutils 或 uutils（Ubuntu 25.10 及以后的默认）的 Linux。CI 中已在 Ubuntu、Debian、Fedora 和 Arch Linux 上测试。不支持 Alpine 等基于 BusyBox 的系统
+- bash、perl、curl（macOS 和大多数 Linux 发行版自带）
+- [fzf](https://github.com/junegunn/fzf)（0.58 或更高版本）
 - [jq](https://jqlang.github.io/jq/)
 - [ripgrep](https://github.com/BurntSushi/ripgrep)（`rg`）
 - [Claude Code](https://docs.claude.com/en/docs/claude-code)（`claude` 命令）
 
 如果缺少 fzf、jq 或 ripgrep，cch 会询问是否用 Homebrew 安装。
+
+在 Linux 上，发行版自带的 fzf 可能低于 0.58（如 Ubuntu 24.04 和 Debian 12），cch 启动时会提示，可从 [fzf 发布页](https://github.com/junegunn/fzf/releases) 获取最新版。删除（ctrl-x）会用 `gio trash`（大多数桌面环境自带）或 trash-cli 的 `trash-put` 移到回收站。
 
 ## 安装
 

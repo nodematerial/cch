@@ -24,14 +24,16 @@ Claude Code stores conversations per launch directory, so once you work in sever
 
 ## Requirements
 
-- macOS (uses `stat -f`, `tail -r` and `trash`; Linux is not supported yet)
-- bash, perl, curl (preinstalled on macOS)
-- [fzf](https://github.com/junegunn/fzf) (tested with 0.65)
+- macOS, or Linux with GNU coreutils or uutils (Ubuntu 25.10 and later). Tested in CI on Ubuntu, Debian, Fedora and Arch Linux. BusyBox-based systems such as Alpine are not supported
+- bash, perl, curl (preinstalled on macOS and most Linux distributions)
+- [fzf](https://github.com/junegunn/fzf) 0.58 or later
 - [jq](https://jqlang.github.io/jq/)
 - [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`)
 - [Claude Code](https://docs.claude.com/en/docs/claude-code) (the `claude` command)
 
 If fzf, jq or ripgrep is missing, cch offers to install it with Homebrew.
+
+On Linux, your distribution's fzf may be older than 0.58 (Ubuntu 24.04 and Debian 12 are); cch tells you so on launch, and the latest is on [the fzf releases page](https://github.com/junegunn/fzf/releases). Delete (ctrl-x) moves files to the Trash with `gio trash` (preinstalled on most desktops) or `trash-put` from trash-cli.
 
 ## Installation
 

@@ -206,7 +206,8 @@ load test_helper
   PATH="$bin" run "$CCH" -p < /dev/null
   [ "$status" -eq 1 ]
   [[ "$output" == *"cch needs: fzf jq rg"* ]] || false
-  [[ "$output" == *"brew install fzf jq ripgrep"* ]] || false
+  # No package manager is on this PATH, so only the package names are given
+  [[ "$output" == *"(packages: fzf jq ripgrep)"* ]] || false
 }
 
 @test "help is shown in the chosen language" {
@@ -490,4 +491,37 @@ summary_count() {
   PATH="$bin" run "$CCH" --version
   [ "$status" -eq 0 ]
   [[ "$output" =~ ^cch\ [0-9]+\.[0-9]+\.[0-9]+$ ]] || false
+}
+
+# fake_fzf <version line>: puts an fzf that only reports this version first on PATH
+fake_fzf() {
+  mkdir -p "$BATS_TEST_TMPDIR/fakefzf"
+  printf '#!/bin/bash\necho "%s"\n' "$1" > "$BATS_TEST_TMPDIR/fakefzf/fzf"
+  chmod +x "$BATS_TEST_TMPDIR/fakefzf/fzf"
+  export PATH="$BATS_TEST_TMPDIR/fakefzf:$PATH"
+}
+
+@test "an fzf older than 0.58 is reported and cch exits" {
+  fake_fzf "0.44.1 (debian)"
+  run "$CCH" -p
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"cch needs fzf 0.58 or later (found 0.44.1)"* ]] || false
+}
+
+@test "fzf 0.58 or later, or a version that cannot be read, is accepted" {
+  new_session /work/api "hello" > /dev/null
+  for v in "0.58.0 (abc123)" "1.0.0" "dev"; do
+    fake_fzf "$v"
+    run "$CCH" -p
+    [ "$status" -eq 0 ]
+  done
+}
+
+@test "preview wraps a long prompt at 80 columns without splitting wide characters" {
+  # 60 wide characters are 120 columns: two lines of 40 and 20, all valid UTF-8
+  f=$(new_session "$HOME/workspace/api" "$(printf 'あ%.0s' $(seq 60))")
+  run last_prompt_of "$f"
+  [ "${#lines[@]}" -eq 2 ]
+  [ "${lines[0]}" = "$(printf 'あ%.0s' $(seq 40))" ]
+  [ "${lines[1]}" = "$(printf 'あ%.0s' $(seq 20))" ]
 }

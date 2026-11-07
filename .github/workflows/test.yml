@@ -9,18 +9,70 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    runs-on: macos-latest
+  # Lint once; the result does not depend on the OS
+  shellcheck:
+    runs-on: ubuntu-latest
     steps:
       # Pinned to a commit rather than a tag, which can be moved
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Install tools
-        run: brew install fzf jq ripgrep bats-core shellcheck
-      - name: ShellCheck
-        run: |
+      - run: |
           shellcheck cch
           shellcheck -s bash test/test_helper.bash
-      - name: Tests
-        run: bats test/
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: brew install fzf jq ripgrep bats-core
+      - run: bats test/
+
+  # Ubuntu's own fzf is too old (0.44 on 24.04), so this job uses the oldest fzf cch supports,
+  # which also checks that the minimum in cch and the README is still right
+  ubuntu:
+    runs-on: ubuntu-latest
+    env:
+      FZF_VERSION: 0.58.0
+      FZF_SHA256: 9b9a8ca8d45a041586323b355f613b94e3301dc6214a43adccfae225a783f0bc
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq ripgrep bats uuid-runtime
+          curl -fsSLO "https://github.com/junegunn/fzf/releases/download/v$FZF_VERSION/fzf-$FZF_VERSION-linux_amd64.tar.gz"
+          echo "$FZF_SHA256  fzf-$FZF_VERSION-linux_amd64.tar.gz" | sha256sum -c -
+          sudo tar xzf "fzf-$FZF_VERSION-linux_amd64.tar.gz" -C /usr/local/bin fzf
+          fzf --version
+      - run: bats test/
+
+  # Other distributions, each with the packages its users would get
+  linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:trixie
+            install: apt-get update && apt-get install -y fzf jq ripgrep bats perl uuid-runtime
+          - image: fedora:latest
+            install: dnf install -y fzf jq ripgrep bats perl findutils gawk util-linux
+          - image: archlinux:latest
+            install: pacman -Syu --noconfirm fzf jq ripgrep bats perl util-linux
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    env:
+      LANG: C.UTF-8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install tools
+        run: |
+          ${{ matrix.install }}
+          fzf --version
+      - run: bats test/
