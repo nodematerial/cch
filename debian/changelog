@@ -1,3 +1,9 @@
+cch (0.3.2) unstable; urgency=medium
+
+  * Package for ppa:nodematerial/cch.
+
+ -- Kota Noda <nodematerial@gmail.com>  Sat, 07 Nov 2026 23:13:47 +0900
+
 cch (0.3.1) unstable; urgency=medium
 
   * Run with fzf 0.38 or later, leaving out ctrl-t before 0.58.
