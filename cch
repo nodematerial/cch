@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # List Claude Code conversations across all projects and resume the selected one in its directory
 #   cch                    list all conversations, newest first
 #   cch <word>             open with the conversations whose content contains <word>
@@ -10,6 +10,34 @@
 set -eu
 
 CCH_VERSION="0.2.0"
+
+# macOS ships BSD tools and Linux ships GNU ones; these wrappers hide the differences
+
+# "mtime<TAB>path" for each file, as a command so xargs can run it too
+if stat -c %Y / >/dev/null 2>&1; then
+  MTIME_LIST=(stat -c $'%Y\t%n')
+else
+  MTIME_LIST=(stat -f $'%m\t%N')
+fi
+
+# Print lines last to first
+reverse_lines() {
+  if command -v tac >/dev/null 2>&1; then tac "$@"; else tail -r "$@"; fi
+}
+
+# Move files to the Trash: trash (macOS 14+, or trash-cli), then gio (GNOME/most Linux desktops), then trash-cli
+move_to_trash() {
+  if command -v trash >/dev/null 2>&1; then
+    trash "$@"
+  elif command -v gio >/dev/null 2>&1; then
+    gio trash -- "$@"
+  elif command -v trash-put >/dev/null 2>&1; then
+    trash-put -- "$@"
+  else
+    echo "cch needs a trash command to delete: trash, gio (glib) or trash-put (trash-cli)" >&2
+    return 1
+  fi
+}
 
 # Runs before the language is chosen (the chooser itself needs fzf), so messages are English only
 check_deps() {
@@ -33,7 +61,34 @@ check_deps() {
       brew install "${pkgs[@]}" && return 0
     fi
   else
-    echo "Install them, e.g.: brew install ${pkgs[*]}" >&2
+    local pm
+    for pm in brew apt dnf pacman zypper apk; do command -v "$pm" >/dev/null 2>&1 && break; pm=; done
+    case "$pm" in
+      brew) echo "Install them, e.g.: brew install ${pkgs[*]}" >&2 ;;
+      pacman) echo "Install them, e.g.: sudo pacman -S ${pkgs[*]}" >&2 ;;
+      ?*) echo "Install them, e.g.: sudo $pm install ${pkgs[*]}" >&2 ;;
+      *) echo "Install them with your package manager (packages: ${pkgs[*]})" >&2 ;;
+    esac
+  fi
+  exit 1
+}
+
+# ctrl-t switches fields with change-nth, added in fzf 0.58. An older fzf starts fine and only fails there,
+# so check up front. Versions that cannot be parsed (such as dev builds) are let through
+FZF_MIN_VERSION=0.58
+check_fzf_version() {
+  local v major minor
+  v=$(fzf --version 2>/dev/null) || return 0
+  IFS=. read -r major minor _ <<< "${v%% *}"
+  case "$major.$minor" in *[!0-9.]*|.*|*.) return 0 ;; esac
+  if [ "$major" -gt "${FZF_MIN_VERSION%%.*}" ] || [ "$minor" -ge "${FZF_MIN_VERSION#*.}" ]; then
+    return 0
+  fi
+  echo "cch needs fzf $FZF_MIN_VERSION or later (found ${v%% *})" >&2
+  if command -v brew >/dev/null 2>&1; then
+    echo "Update it with: brew upgrade fzf" >&2
+  else
+    echo "Your package manager may ship an older one; get the latest from https://github.com/junegunn/fzf/releases" >&2
   fi
   exit 1
 }
@@ -41,7 +96,9 @@ check_deps() {
 case "${1:-}" in
   -v|--version|version) echo "cch $CCH_VERSION"; exit 0 ;;
   help|-h|--help) ;;
-  *) check_deps ;;
+  # Internal commands run from inside fzf, so it was checked at launch
+  __*) check_deps ;;
+  *) check_deps; check_fzf_version ;;
 esac
 
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cch"
@@ -257,7 +314,7 @@ extract_dialogue() {
 # Conversations with no summary or a summary older than the conversation, newest first
 summary_targets() {
   local f out
-  stat -f $'%m\t%N' "$PROJECTS_DIR"/*/*.jsonl 2>/dev/null | sort -rn | while IFS=$'\t' read -r _ f; do
+  "${MTIME_LIST[@]}" "$PROJECTS_DIR"/*/*.jsonl 2>/dev/null | sort -rn | while IFS=$'\t' read -r _ f; do
     out="$SUMMARY_DIR/$(basename "$f" .jsonl).txt"
     [ -f "$out" ] && [ "$out" -nt "$f" ] && continue
     echo "$f"
@@ -340,7 +397,7 @@ QUERY="${*:-}"
 json_field() {
   # $1: file, $2: type, $3: key to extract. Returns the last recorded value on one line.
   # Find the line with rg, then let jq decode it so quotes and backslashes come out right
-  tail -r "$1" 2>/dev/null | rg -m1 -F "\"type\":\"$2\"" \
+  reverse_lines "$1" 2>/dev/null | rg -m1 -F "\"type\":\"$2\"" \
     | jq -r --arg k "$3" '.[$k] // empty | gsub("[\t\n\r]"; " ")' 2>/dev/null || true
 }
 
@@ -384,7 +441,7 @@ list_sessions() {
   work=$(mktemp -d)
 
   # Newest first by mtime: "mtime<TAB>path"
-  echo "$files" | tr '\n' '\0' | xargs -0 stat -f $'%m\t%N' | sort -rn > "$work/list"
+  echo "$files" | tr '\n' '\0' | xargs -0 "${MTIME_LIST[@]}" | sort -rn > "$work/list"
 
   # Only new or updated files are read again. Title and cost extraction is slow on large files,
   # and spawning commands per file adds up, so cached rows are joined in a single pass below
@@ -462,7 +519,7 @@ session_meta() {
         | (add // 0) * 100 | round
         | "$\(. / 100 | floor).\(. % 100 | tostring | if length < 2 then "0" + . else . end)"' 2>/dev/null || true)
   fi
-  ctx=$(tail -r "$f" | grep -F '"type":"assistant"' | grep -v -m1 -F '"isSidechain":true' \
+  ctx=$(reverse_lines "$f" | grep -F '"type":"assistant"' | grep -v -m1 -F '"isSidechain":true' \
     | jq -r '.message.usage // empty
       | (.input_tokens // 0) + (.cache_read_input_tokens // 0) + (.cache_creation_input_tokens // 0)
       | if . >= 1000 then "\(. / 1000 | round)K" else tostring end' 2>/dev/null || true)
@@ -554,10 +611,10 @@ delete_session() {
   read -r -s -n 1 answer || true
   echo
   [ -z "$answer" ] || [ "$answer" = "y" ] || return 0
-  trash "$f"
+  move_to_trash "$f"
   # Subagent transcripts and tool results live in a directory named after the conversation
-  [ -d "${f%.jsonl}" ] && trash "${f%.jsonl}"
-  [ -f "$SUMMARY_DIR/$id.txt" ] && trash "$SUMMARY_DIR/$id.txt"
+  [ -d "${f%.jsonl}" ] && move_to_trash "${f%.jsonl}"
+  [ -f "$SUMMARY_DIR/$id.txt" ] && move_to_trash "$SUMMARY_DIR/$id.txt"
   drop_cache_entry "$f"
 }
 
@@ -572,7 +629,7 @@ preview_session() {
   local f="$1" d="$2" b s t="~"
   echo "dir    : ${d/#$HOME/$t}"
   # Claude Code records "HEAD" even outside git repositories, so hide it
-  b=$(tail -r "$f" | grep -m1 -o '"gitBranch":"[^"]*"' | sed 's/.*:"//; s/"$//')
+  b=$(reverse_lines "$f" | grep -m1 -o '"gitBranch":"[^"]*"' | sed 's/.*:"//; s/"$//')
   if [ -n "$b" ] && [ "$b" != "HEAD" ]; then echo "branch : $b"; fi
   # Inside fzf's preview (FZF_PREVIEW_COLUMNS is set), draw PRs in orange as OSC 8 hyperlinks.
   # fzf takes mouse clicks for itself, so terminals open them with shift held (shift+cmd+click in Ghostty)
@@ -592,7 +649,15 @@ preview_session() {
     echo
   fi
   echo "$CCH_L_LAST_PROMPT"
-  last_prompt "$f" | fold -w 80
+  # GNU fold counts bytes and splits multibyte characters, so wrap at 80 display columns in perl
+  last_prompt "$f" | perl -CSD -ne '
+    chomp; my ($w, $o) = (0, "");
+    for my $c (split //) {
+      my $cw = $c =~ /\p{Ea=W}|\p{Ea=F}/ ? 2 : 1;
+      if ($w + $cw > 80) { print "$o\n"; ($o, $w) = ("", 0) }
+      $o .= $c; $w += $cw;
+    }
+    print "$o\n"'
 }
 
 # The latest message the user actually wrote.
@@ -601,7 +666,7 @@ preview_session() {
 # and summaries inserted by /compact; skip those. Messages sent while Claude is working are recorded as
 # queued_command attachments instead. Pasted blocks are dropped in favor of the user's own words
 last_prompt() {
-  tail -r "$1" | rg -F -e '"type":"user"' -e '"queued_command"' | jq -nr '
+  reverse_lines "$1" | rg -F -e '"type":"user"' -e '"queued_command"' | jq -nr '
     def injected: test("^<(task-notification|bash-input|bash-stdout|bash-stderr|local-command-stdout|local-command-stderr|local-command-caveat|command-name|command-message|command-args|system-reminder)[ >]");
     def trim_ws: sub("^\\s+"; "") | sub("\\s+$"; "");
     def text_of: if type == "string" then . else (map(select(.type == "text") | .text) | join("\n")) end;
@@ -628,7 +693,12 @@ case "${1:-}" in
 esac
 
 if [ "$PRINT_ONLY" = 1 ]; then
-  list_sessions | format_rows | cut -f1-4 | expand -t 8 | sed $'s/\033\[[0-9]*m//g'
+  # GNU expand counts bytes, so wide characters would shift the columns; expand tabs by display width instead
+  list_sessions | format_rows | cut -f1-4 | perl -CSD -pe '
+    s/\e\[[0-9]*m//g;
+    my $col = 0;
+    s{([^\t]*)\t}{ $col += width($1); my $pad = 8 - $col % 8; $col += $pad; $1 . " " x $pad }ge;
+    sub width { my $n = 0; $n += /\p{Ea=W}|\p{Ea=F}/ ? 2 : 1 for split //, $_[0]; $n }'
   exit 0
 fi
 
@@ -648,8 +718,8 @@ start_opts=(--prompt="$CCH_P_TITLE")
 # ctrl-t cycles title -> content -> date -> dir. The content field turns off fzf's own filtering and searches
 # the conversations again on every change of the query; the prompt tells __list which field is active
 # shellcheck disable=SC2016
-selected=$(printf '%s\n' "$rows" | SHELL=/bin/bash fzf \
-  --ansi --delimiter=$'\t' --with-nth=1,2,3,4 --tabstop=8 \
+selected=$(printf '%s\n' "$rows" | SHELL="$BASH" fzf \
+  --ansi --delimiter=$'\t' --with-nth=1,2,3,4 --tabstop=8 --layout=reverse \
   --nth=3 "${start_opts[@]}" \
   --header="$T_HEADER" \
   --bind='ctrl-t:transform:case $FZF_PROMPT in
