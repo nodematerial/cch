@@ -62,7 +62,7 @@ jobs:
           - image: fedora:latest
             install: dnf install -y fzf jq ripgrep bats perl findutils gawk util-linux
           - image: archlinux:latest
-            install: pacman -Syu --noconfirm fzf jq ripgrep bash-bats perl util-linux
+            install: pacman -Syu --noconfirm fzf jq ripgrep bats perl util-linux
     runs-on: ubuntu-latest
     container: ${{ matrix.image }}
     env:
