@@ -30,33 +30,18 @@ jobs:
       - run: brew install fzf jq ripgrep bats-core
       - run: bats test/
 
-  # Ubuntu's own fzf is too old (0.44 on 24.04), so this job uses the oldest fzf cch supports,
-  # which also checks that the minimum in cch and the README is still right
-  ubuntu:
-    runs-on: ubuntu-latest
-    env:
-      FZF_VERSION: 0.58.0
-      FZF_SHA256: 9b9a8ca8d45a041586323b355f613b94e3301dc6214a43adccfae225a783f0bc
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Install tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq ripgrep bats uuid-runtime
-          curl -fsSLO "https://github.com/junegunn/fzf/releases/download/v$FZF_VERSION/fzf-$FZF_VERSION-linux_amd64.tar.gz"
-          echo "$FZF_SHA256  fzf-$FZF_VERSION-linux_amd64.tar.gz" | sha256sum -c -
-          sudo tar xzf "fzf-$FZF_VERSION-linux_amd64.tar.gz" -C /usr/local/bin fzf
-          fzf --version
-      - run: bats test/
-
-  # Other distributions, each with the packages its users would get
+  # Linux distributions, each with the packages its users would get, including their fzf
   linux:
     strategy:
       fail-fast: false
       matrix:
         include:
+          # fzf 0.44 and 0.38: cch runs without ctrl-t
+          - image: ubuntu:24.04
+            install: apt-get update && apt-get install -y fzf jq ripgrep bats perl uuid-runtime
+          - image: debian:bookworm
+            install: apt-get update && apt-get install -y fzf jq ripgrep bats perl uuid-runtime
+          # fzf 0.58 or later: every feature
           - image: debian:trixie
             install: apt-get update && apt-get install -y fzf jq ripgrep bats perl uuid-runtime
           - image: fedora:latest

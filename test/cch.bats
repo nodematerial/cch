@@ -493,28 +493,83 @@ summary_count() {
   [[ "$output" =~ ^cch\ [0-9]+\.[0-9]+\.[0-9]+$ ]] || false
 }
 
-# fake_fzf <version line>: puts an fzf that only reports this version first on PATH
+# fake_fzf <version line>: puts first on PATH an fzf that reports this version, and otherwise
+# records its arguments, CCH_FIXED_QUERY and the rows it was given, then quits as if Esc was pressed
 fake_fzf() {
   mkdir -p "$BATS_TEST_TMPDIR/fakefzf"
-  printf '#!/bin/bash\necho "%s"\n' "$1" > "$BATS_TEST_TMPDIR/fakefzf/fzf"
+  cat > "$BATS_TEST_TMPDIR/fakefzf/fzf" <<EOF
+#!/bin/bash
+[ "\$1" = --version ] && { echo "$1"; exit 0; }
+printf '%s\n' "\$@" > "$BATS_TEST_TMPDIR/fzf-args.txt"
+echo "\${CCH_FIXED_QUERY:-}" > "$BATS_TEST_TMPDIR/fzf-fixed.txt"
+cat > "$BATS_TEST_TMPDIR/fzf-rows.txt"
+exit 130
+EOF
   chmod +x "$BATS_TEST_TMPDIR/fakefzf/fzf"
   export PATH="$BATS_TEST_TMPDIR/fakefzf:$PATH"
 }
 
-@test "an fzf older than 0.58 is reported and cch exits" {
-  fake_fzf "0.44.1 (debian)"
+@test "an fzf older than 0.38 is reported and cch exits" {
+  fake_fzf "0.37.0 (abc123)"
   run "$CCH" -p
   [ "$status" -eq 1 ]
-  [[ "$output" == *"cch needs fzf 0.58 or later (found 0.44.1)"* ]] || false
+  [[ "$output" == *"cch needs fzf 0.38 or later (found 0.37.0)"* ]] || false
 }
 
-@test "fzf 0.58 or later, or a version that cannot be read, is accepted" {
+@test "fzf 0.38 or later, or a version that cannot be read, is accepted" {
   new_session /work/api "hello" > /dev/null
-  for v in "0.58.0 (abc123)" "1.0.0" "dev"; do
+  for v in "0.38.0" "0.44.1 (debian)" "0.58.0 (abc123)" "1.0.0" "dev"; do
     fake_fzf "$v"
     run "$CCH" -p
     [ "$status" -eq 0 ]
   done
+}
+
+@test "with fzf 0.58 or later, ctrl-t cycles the filter field" {
+  new_session /work/api "hello" > /dev/null
+  fake_fzf "0.58.0 (abc123)"
+  run "$CCH" < /dev/null
+  [ "$status" -eq 0 ]
+  grep -q '^--bind=ctrl-t:transform:' "$BATS_TEST_TMPDIR/fzf-args.txt"
+  grep -q '^--header=Enter: resume / ctrl-t: filter field' "$BATS_TEST_TMPDIR/fzf-args.txt"
+}
+
+@test "with an older fzf, ctrl-t is left out and the header says why" {
+  new_session /work/api "hello" > /dev/null
+  fake_fzf "0.44.1 (debian)"
+  run "$CCH" < /dev/null
+  [ "$status" -eq 0 ]
+  ! grep -q 'ctrl-t:' "$BATS_TEST_TMPDIR/fzf-args.txt"
+  ! grep -q -e 'transform' -e 'change-nth' "$BATS_TEST_TMPDIR/fzf-args.txt"
+  grep -q '^ctrl-t (filter field) needs fzf 0.58 or later; you have 0.44.1' "$BATS_TEST_TMPDIR/fzf-args.txt"
+}
+
+@test "with an older fzf, a word given at launch narrows the list and stays for reloads" {
+  f=$(new_session /work/api "find the PINEAPPLE")
+  add_title "$f" "Fruit"
+  g=$(new_session /work/web "nothing here")
+  add_title "$g" "Other"
+  fake_fzf "0.44.1 (debian)"
+  run "$CCH" PINEAPPLE < /dev/null
+  [ "$status" -eq 0 ]
+  grep -q 'Fruit' "$BATS_TEST_TMPDIR/fzf-rows.txt"
+  ! grep -q 'Other' "$BATS_TEST_TMPDIR/fzf-rows.txt"
+  [ "$(cat "$BATS_TEST_TMPDIR/fzf-fixed.txt")" = PINEAPPLE ]
+  grep -q '^Showing only conversations that contain "PINEAPPLE"' "$BATS_TEST_TMPDIR/fzf-args.txt"
+  # Reloads after rename, delete or summarize keep the word
+  run env CCH_FIXED_QUERY=PINEAPPLE "$CCH" __list
+  [[ "$output" == *"Fruit"* ]] || false
+  [[ "$output" != *"Other"* ]] || false
+}
+
+@test "the installed fzf accepts every option and key binding cch passes" {
+  # --filter makes fzf parse all options and then print the match without a screen.
+  # An unknown option or action makes it exit with an error instead, so claude is never resumed
+  f=$(new_session "$BATS_TEST_TMPDIR" "hello")
+  add_title "$f" "Resume me"
+  FZF_DEFAULT_OPTS="--filter=Resume" run "$CCH" < /dev/null
+  [ "$status" -eq 0 ]
+  [ "$(cat "$CLAUDE_STUB_ARGS")" = "-r $(basename "$f" .jsonl)" ]
 }
 
 @test "preview wraps a long prompt at 80 columns without splitting wide characters" {

@@ -73,23 +73,25 @@ check_deps() {
   exit 1
 }
 
-# ctrl-t switches fields with change-nth, added in fzf 0.58. An older fzf starts fine and only fails there,
-# so check up front. Versions that cannot be parsed (such as dev builds) are let through
-FZF_MIN_VERSION=0.58
-check_fzf_version() {
+# fzf_at_least <major.minor>: whether the installed fzf is that version or later.
+# Versions that cannot be parsed (such as dev builds) count as new enough
+fzf_at_least() {
   local v major minor
   v=$(fzf --version 2>/dev/null) || return 0
   IFS=. read -r major minor _ <<< "${v%% *}"
   case "$major.$minor" in *[!0-9.]*|.*|*.) return 0 ;; esac
-  if [ "$major" -gt "${FZF_MIN_VERSION%%.*}" ] || [ "$minor" -ge "${FZF_MIN_VERSION#*.}" ]; then
-    return 0
-  fi
-  echo "cch needs fzf $FZF_MIN_VERSION or later (found ${v%% *})" >&2
-  if command -v brew >/dev/null 2>&1; then
-    echo "Update it with: brew upgrade fzf" >&2
-  else
-    echo "Your package manager may ship an older one; get the latest from https://github.com/junegunn/fzf/releases" >&2
-  fi
+  [ "$major" -gt "${1%%.*}" ] || { [ "$major" -eq "${1%%.*}" ] && [ "$minor" -ge "${1#*.}" ]; }
+}
+
+# ctrl-t switches fields with change-nth (fzf 0.58) and picks the next field with transform (0.45).
+# Older ones, such as 0.44 in Ubuntu 24.04 and 0.38 in Debian 12, run cch without ctrl-t;
+# anything older than 0.38 has not been tried
+FZF_MIN_VERSION=0.38
+FZF_FULL_VERSION=0.58
+check_fzf_version() {
+  fzf_at_least "$FZF_MIN_VERSION" && return 0
+  echo "cch needs fzf $FZF_MIN_VERSION or later (found $(fzf --version | cut -d' ' -f1))" >&2
+  echo "Get the latest from https://github.com/junegunn/fzf/releases" >&2
   exit 1
 }
 
@@ -143,6 +145,9 @@ case "$CCH_LANG" in
     T_DELETE="削除"
     T_DELETE_CONFIRM="ゴミ箱に移しますか？ (Enter/y: 実行 / ほかのキー: 中止): "
     T_HEADER="Enter: 再開 / ctrl-t: 絞り込み対象 / ctrl-r: 名前変更 / ctrl-x: 削除 / ctrl-s: 要約"
+    T_HEADER_OLD="Enter: 再開 / ctrl-r: 名前変更 / ctrl-x: 削除 / ctrl-s: 要約"
+    T_OLD_FZF="fzf %s では ctrl-t（絞り込み対象の切替）は使えません（0.58 以降が必要）。本文検索は cch <語句> で"
+    T_FIXED_QUERY="本文に「%s」を含む会話だけを表示中"
     T_SUMMARIZE_CONFIRM="要約のない・古い会話が %s 件あります。要約しますか？（モデル: %s）\n(Enter/y: 直近 %s 件 / all: すべて %s 件 / ほかの入力: 中止): "
     T_BAD_COUNT="件数には数字か all を指定してください"
     T_DIR_MISSING="ディレクトリがありません（worktree を消した可能性）"
@@ -163,6 +168,10 @@ case "$CCH_LANG" in
     T_DELETE="删除"
     T_DELETE_CONFIRM="移到废纸篓？(Enter/y: 执行 / 其他键: 取消): "
     T_HEADER="Enter: 恢复 / ctrl-t: 筛选对象 / ctrl-r: 重命名 / ctrl-x: 删除 / ctrl-s: 摘要"
+    T_HEADER_OLD="Enter: 恢复 / ctrl-r: 重命名 / ctrl-x: 删除 / ctrl-s: 摘要"
+    T_OLD_FZF="fzf %s 不支持 ctrl-t（切换筛选对象），需要 0.58 或更高版本。搜索内容请用 cch <词语>"
+    # shellcheck disable=SC1111  # Chinese quotation marks, not shell quotes
+    T_FIXED_QUERY="仅显示内容包含“%s”的对话"
     T_SUMMARIZE_CONFIRM="有 %s 个对话没有摘要或摘要已过时。要生成摘要吗？（模型: %s）\n(Enter/y: 最近 %s 个 / all: 全部 %s 个 / 其他输入: 取消): "
     T_BAD_COUNT="数量请指定数字或 all"
     T_DIR_MISSING="目录不存在（worktree 可能已被删除）"
@@ -183,6 +192,9 @@ case "$CCH_LANG" in
     T_DELETE="Delete"
     T_DELETE_CONFIRM="Move to Trash? (Enter/y: yes / any other key: cancel): "
     T_HEADER="Enter: resume / ctrl-t: filter field / ctrl-r: rename / ctrl-x: delete / ctrl-s: summarize"
+    T_HEADER_OLD="Enter: resume / ctrl-r: rename / ctrl-x: delete / ctrl-s: summarize"
+    T_OLD_FZF="ctrl-t (filter field) needs fzf 0.58 or later; you have %s. Search content with: cch <word>"
+    T_FIXED_QUERY="Showing only conversations that contain \"%s\""
     T_SUMMARIZE_CONFIRM="%s conversations have no or a stale summary. Summarize them? (model: %s)\n(Enter/y: latest %s / all: all %s / anything else: cancel): "
     T_BAD_COUNT="The count must be a number or all"
     T_DIR_MISSING="Directory not found (the worktree may have been removed)"
@@ -683,8 +695,12 @@ last_prompt() {
 
 # Internal commands invoked from fzf key bindings
 case "${1:-}" in
-  # In the content field the query is the search word; in the other fields fzf filters the full list itself
-  __list) QUERY=""; [ "${FZF_PROMPT:-}" = "$CCH_P_CONTENT" ] && QUERY="${FZF_QUERY:-}"; list_sessions | format_rows; exit 0 ;;
+  # In the content field the query is the search word; in the other fields fzf filters the full list itself.
+  # With an older fzf there is no content field, and the word given at launch (CCH_FIXED_QUERY) stays
+  __list)
+    QUERY="${CCH_FIXED_QUERY:-}"
+    [ "${FZF_PROMPT:-}" = "$CCH_P_CONTENT" ] && QUERY="${FZF_QUERY:-}"
+    list_sessions | format_rows; exit 0 ;;
   __rename) rename_session "$2"; exit 0 ;;
   __delete) delete_session "$2"; exit 0 ;;
   __summarize) summarize_from_list; exit 0 ;;
@@ -709,26 +725,44 @@ export CCH_SELF="$SELF"
 # Build the list before opening fzf so a long first run can show a progress bar
 rows=$(CCH_SHOW_PROGRESS=1 list_sessions | format_rows)
 
-# Opened with a word, start in the content field with the word in the query
-start_opts=(--prompt="$CCH_P_TITLE")
-[ -n "$QUERY" ] && start_opts=(--prompt="$CCH_P_CONTENT" --query="$QUERY" --disabled)
-
-# fzf runs preview and binding commands with $SHELL; force bash because the commands use bash syntax.
-# $FZF_PROMPT, $CCH_P_* and $CCH_SELF in the ctrl-t and change bindings are expanded by that shell, not here.
 # ctrl-t cycles title -> content -> date -> dir. The content field turns off fzf's own filtering and searches
-# the conversations again on every change of the query; the prompt tells __list which field is active
+# the conversations again on every change of the query; the prompt tells __list which field is active.
+# fzf runs preview and binding commands with $SHELL; force bash because the commands use bash syntax.
+# $FZF_PROMPT, $CCH_P_* and $CCH_SELF in these bindings are expanded by that shell, not here
 # shellcheck disable=SC2016
-selected=$(printf '%s\n' "$rows" | SHELL="$BASH" fzf \
-  --ansi --delimiter=$'\t' --with-nth=1,2,3,4 --tabstop=8 --layout=reverse \
-  --nth=3 "${start_opts[@]}" \
-  --header="$T_HEADER" \
-  --bind='ctrl-t:transform:case $FZF_PROMPT in
+if fzf_at_least "$FZF_FULL_VERSION"; then
+  header="$T_HEADER"
+  mode_opts=(
+    --bind='ctrl-t:transform:case $FZF_PROMPT in
       "$CCH_P_TITLE") echo "change-prompt($CCH_P_CONTENT)+disable-search+reload(\"$CCH_SELF\" __list)" ;;
       "$CCH_P_CONTENT") echo "change-prompt($CCH_P_DATE)+change-nth(1)+enable-search+clear-query+reload(\"$CCH_SELF\" __list)" ;;
       "$CCH_P_DATE") echo "change-prompt($CCH_P_DIR)+change-nth(2)" ;;
       *) echo "change-prompt($CCH_P_TITLE)+change-nth(3)" ;;
-    esac' \
-  --bind='change:transform:[ "$FZF_PROMPT" = "$CCH_P_CONTENT" ] && echo "reload(\"$CCH_SELF\" __list)" || true' \
+    esac'
+    --bind='change:transform:[ "$FZF_PROMPT" = "$CCH_P_CONTENT" ] && echo "reload(\"$CCH_SELF\" __list)" || true'
+  )
+  # Opened with a word, start in the content field with the word in the query
+  start_opts=(--prompt="$CCH_P_TITLE")
+  [ -n "$QUERY" ] && start_opts=(--prompt="$CCH_P_CONTENT" --query="$QUERY" --disabled)
+else
+  # Without ctrl-t only titles are filtered. mode_opts stays empty; bash 3.2 (macOS) needs the +
+  # form to expand an empty array under set -u. A word given at launch narrows the list and stays for reloads
+  # shellcheck disable=SC2059
+  header="$T_HEADER_OLD"$'\n'"$(printf "$T_OLD_FZF" "$(fzf --version | cut -d' ' -f1)")"
+  mode_opts=()
+  start_opts=(--prompt="$CCH_P_TITLE")
+  if [ -n "$QUERY" ]; then
+    export CCH_FIXED_QUERY="$QUERY"
+    # shellcheck disable=SC2059
+    header+=$'\n'"$(printf "$T_FIXED_QUERY" "$QUERY")"
+  fi
+fi
+
+selected=$(printf '%s\n' "$rows" | SHELL="$BASH" fzf \
+  --ansi --delimiter=$'\t' --with-nth=1,2,3,4 --tabstop=8 --layout=reverse \
+  --nth=3 "${start_opts[@]}" \
+  --header="$header" \
+  ${mode_opts[@]+"${mode_opts[@]}"} \
   --bind="ctrl-r:execute('$SELF' __rename {6})+reload('$SELF' __list)" \
   --bind="ctrl-x:execute('$SELF' __delete {6})+reload('$SELF' __list)" \
   --bind="ctrl-s:execute('$SELF' __summarize)+reload('$SELF' __list)+refresh-preview" \
