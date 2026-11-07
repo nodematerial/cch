@@ -85,6 +85,9 @@ jobs:
             .github/scripts/ppa-source.sh "$version" "$ubuntu" "$series" out "$key"
           done
           dput "ppa:nodematerial/cch" out/*_source.changes
+      # gpg-agent keeps the key in memory after signing, and later steps (checkout's cleanup) still run here
       - name: Remove the key
         if: always()
-        run: rm -rf "$RUNNER_TEMP/gnupg"
+        run: |
+          GNUPGHOME="$RUNNER_TEMP/gnupg" gpgconf --kill all || true
+          rm -rf "$RUNNER_TEMP/gnupg"

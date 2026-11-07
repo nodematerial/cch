@@ -7,6 +7,12 @@
 set -euo pipefail
 
 version="$1" ubuntu="$2" series="$3" out="$4" key="${5:-}"
+
+# The Ubuntu release comes from Launchpad and ends up in file names and the changelog, so accept only
+# the shapes it should have
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "bad cch version: $version" >&2; exit 1; }
+[[ "$ubuntu" =~ ^[0-9]{2}\.[0-9]{2}$ ]] || { echo "bad Ubuntu version: $ubuntu" >&2; exit 1; }
+[[ "$series" =~ ^[a-z]+$ ]] || { echo "bad Ubuntu series: $series" >&2; exit 1; }
 deb_version="$version~ubuntu$ubuntu.1"
 repo=$(git rev-parse --show-toplevel)
 work=$(mktemp -d)
