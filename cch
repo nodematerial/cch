@@ -9,7 +9,7 @@
 #   cch --version          show the version
 set -eu
 
-CCH_VERSION="0.2.0"
+CCH_VERSION="0.3.0"
 
 # macOS ships BSD tools and Linux ships GNU ones; these wrappers hide the differences
 
