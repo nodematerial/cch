@@ -1,0 +1,90 @@
+name: ppa
+
+# On every push and PR: build the Debian package and install it on Ubuntu, without the signing key.
+# On a published release: sign the source packages and upload them to ppa:nodematerial/cch
+on:
+  push:
+  pull_request:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  # Build the .deb on each Ubuntu that apt users would have, install it with apt (which pulls in
+  # that release's fzf, jq and ripgrep) and start cch
+  install:
+    if: github.event_name != 'release'
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ["ubuntu:24.04", "ubuntu:rolling"]
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    steps:
+      # Pinned to a commit rather than a tag, which can be moved
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: apt-get update && apt-get install -y dpkg-dev make
+      - run: dpkg-buildpackage -b --no-sign
+      - run: apt-get install -y ../cch_*_all.deb
+      - name: Start cch
+        run: |
+          fzf --version
+          # cch checks for Claude Code at launch, so give it a stand-in
+          printf '#!/bin/sh\nexit 0\n' > /usr/local/bin/claude && chmod +x /usr/local/bin/claude
+          mkdir -p /tmp/claude/projects
+          CLAUDE_CONFIG_DIR=/tmp/claude CCH_CACHE_DIR=/tmp/cache CCH_LANG=en cch -p
+          cch --version
+
+  # Build an unsigned source package for every Ubuntu release the upload targets
+  source:
+    if: github.event_name != 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build source packages
+        run: |
+          version=$(sed -n 's/^CCH_VERSION="\(.*\)"/\1/p' cch)
+          .github/scripts/ppa-series.sh | while read -r ubuntu series; do
+            .github/scripts/ppa-source.sh "$version" "$ubuntu" "$series" out
+          done
+          ls out
+
+  # The signing key lives only in the ppa environment, which runs for v* tags and waits for approval.
+  # No third-party action runs here; only Ubuntu's own gpg, dpkg-dev and dput
+  upload:
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    environment: ppa
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check that the tag matches the version in cch
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version=$(sed -n 's/^CCH_VERSION="\(.*\)"/\1/p' cch)
+          [ "$TAG" = "v$version" ] || { echo "Tag $TAG does not match CCH_VERSION $version" >&2; exit 1; }
+      - run: sudo apt-get update && sudo apt-get install -y dput dpkg-dev
+      - name: Sign and upload
+        env:
+          PPA_GPG_PRIVATE_KEY: ${{ secrets.PPA_GPG_PRIVATE_KEY }}
+        run: |
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          mkdir -m 700 "$GNUPGHOME"
+          printf '%s\n' "$PPA_GPG_PRIVATE_KEY" | gpg --batch --import
+          key=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/ { print $10; exit }')
+          version=$(sed -n 's/^CCH_VERSION="\(.*\)"/\1/p' cch)
+          .github/scripts/ppa-series.sh | while read -r ubuntu series; do
+            .github/scripts/ppa-source.sh "$version" "$ubuntu" "$series" out "$key"
+          done
+          dput "ppa:nodematerial/cch" out/*_source.changes
+      - name: Remove the key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/gnupg"

@@ -1,0 +1,26 @@
+#!/usr/bin/make -f
+# cch is a single bash script, so the package is put together by hand rather than with debhelper
+PKG := debian/cch
+
+build build-arch build-indep:
+
+binary-arch:
+
+binary-indep:
+	rm -rf $(PKG)
+	install -D -m 755 cch $(PKG)/usr/bin/cch
+	install -D -m 644 docs/README.md $(PKG)/usr/share/doc/cch/README.md
+	install -D -m 644 debian/copyright $(PKG)/usr/share/doc/cch/copyright
+	gzip -9n -c debian/changelog > $(PKG)/usr/share/doc/cch/changelog.gz
+	chmod 644 $(PKG)/usr/share/doc/cch/changelog.gz
+	install -d $(PKG)/DEBIAN
+	cd $(PKG) && find usr -type f -exec md5sum {} + | sort -k2 > DEBIAN/md5sums
+	dpkg-gencontrol -pcch -P$(PKG)
+	dpkg-deb --root-owner-group --build $(PKG) ..
+
+binary: binary-indep
+
+clean:
+	rm -rf $(PKG) debian/files
+
+.PHONY: build build-arch build-indep binary binary-arch binary-indep clean
