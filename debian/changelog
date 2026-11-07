@@ -1,0 +1,5 @@
+cch (0.3.1) unstable; urgency=medium
+
+  * Run with fzf 0.38 or later, leaving out ctrl-t before 0.58.
+
+ -- Kota Noda <nodematerial@gmail.com>  Sat, 07 Nov 2026 22:00:00 +0900

@@ -1,0 +1,22 @@
+Source: cch
+Section: utils
+Priority: optional
+Maintainer: Kota Noda <nodematerial@gmail.com>
+Build-Depends: dpkg-dev (>= 1.19)
+Rules-Requires-Root: no
+Standards-Version: 4.7.0
+Homepage: https://github.com/nodematerial/cch
+Vcs-Git: https://github.com/nodematerial/cch.git
+
+Package: cch
+Architecture: all
+Depends: bash, coreutils, perl, curl, fzf (>= 0.38), jq, ripgrep
+Suggests: trash-cli
+Description: browse, search and resume Claude Code conversations across projects
+ cch lists the Claude Code conversations of every project in one fzf list,
+ with AI summaries, cost and context size, and resumes the one you pick in
+ the directory where it started.
+ .
+ It needs Claude Code (the claude command), which is not packaged here.
+ With an fzf older than 0.58, ctrl-t (switching the filter field) is not
+ available; everything else works.
