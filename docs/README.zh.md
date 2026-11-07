@@ -26,14 +26,16 @@ Claude Code 按启动目录分别保存对话，仓库一多，过去的对话�
 
 - macOS，或装有 GNU coreutils 或 uutils（Ubuntu 25.10 及以后的默认）的 Linux。CI 中已在 Ubuntu、Debian、Fedora 和 Arch Linux 上测试。不支持 Alpine 等基于 BusyBox 的系统
 - bash、perl、curl（macOS 和大多数 Linux 发行版自带）
-- [fzf](https://github.com/junegunn/fzf)（0.58 或更高版本）
+- [fzf](https://github.com/junegunn/fzf)（0.38 或更高版本；ctrl-t 需要 0.58 或更高版本）
 - [jq](https://jqlang.github.io/jq/)
 - [ripgrep](https://github.com/BurntSushi/ripgrep)（`rg`）
 - [Claude Code](https://docs.claude.com/en/docs/claude-code)（`claude` 命令）
 
 如果缺少 fzf、jq 或 ripgrep，cch 会询问是否用 Homebrew 安装。
 
-在 Linux 上，发行版自带的 fzf 可能低于 0.58（如 Ubuntu 24.04 和 Debian 12），cch 启动时会提示，可从 [fzf 发布页](https://github.com/junegunn/fzf/releases) 获取最新版。删除（ctrl-x）会用 `gio trash`（大多数桌面环境自带）或 trash-cli 的 `trash-put` 移到回收站。
+fzf 低于 0.58 时（如 Ubuntu 24.04 和 Debian 12 自带的版本），除 ctrl-t 外都能正常使用：列表中只按标题筛选，内容搜索请用 `cch <词语>`（列表顶部也会提示）。如需 ctrl-t，请通过 Homebrew 或 [fzf 发布页](https://github.com/junegunn/fzf/releases) 安装最新版。
+
+在 Linux 上，删除（ctrl-x）会用 `gio trash`（大多数桌面环境自带）或 trash-cli 的 `trash-put` 移到回收站。
 
 ## 安装
 
@@ -75,7 +77,7 @@ cch --version         # 显示版本
 | 按键 | 操作 |
 |---|---|
 | Enter | 恢复对话 |
-| ctrl-t | 依次切换筛选对象：标题 → 内容 → 日期 → 目录。在内容中，会用输入的词语重新查找对话 |
+| ctrl-t | 依次切换筛选对象：标题 → 内容 → 日期 → 目录。在内容中，会用输入的词语重新查找对话（fzf 0.58 或更高版本） |
 | ctrl-r | 重命名（Esc 取消） |
 | ctrl-x | 移到废纸篓（Enter / y 确认，其他键取消） |
 | ctrl-s | 为没有摘要的对话生成摘要（Enter/y：最近 20 个，输入 `all`：全部） |

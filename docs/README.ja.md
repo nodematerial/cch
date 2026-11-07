@@ -26,14 +26,16 @@ Claude Code は起動したディレクトリごとに会話を保存するた�
 
 - macOS、または GNU coreutils か uutils（Ubuntu 25.10 以降の標準）の入った Linux。CI で Ubuntu・Debian・Fedora・Arch Linux を確認しています。Alpine など BusyBox ベースの環境は対象外です
 - bash, perl, curl（macOS と多くの Linux ディストリビューションに標準で入っています）
-- [fzf](https://github.com/junegunn/fzf)（0.58 以降）
+- [fzf](https://github.com/junegunn/fzf)（0.38 以降。ctrl-t は 0.58 以降）
 - [jq](https://jqlang.github.io/jq/)
 - [ripgrep](https://github.com/BurntSushi/ripgrep)（`rg`）
 - [Claude Code](https://docs.claude.com/en/docs/claude-code)（`claude` コマンド）
 
 fzf・jq・ripgrep が入っていない場合は、Homebrew で入れるか聞きます。
 
-Linux では、ディストリビューションの fzf が 0.58 より古いことがあります（Ubuntu 24.04 や Debian 12）。その場合は起動時に知らせるので、[fzf のリリースページ](https://github.com/junegunn/fzf/releases)から最新版を入れてください。削除（ctrl-x）は `gio trash`（多くのデスクトップ環境に標準で入っています）か trash-cli の `trash-put` でゴミ箱に移します。
+fzf が 0.58 より古い場合（Ubuntu 24.04 や Debian 12 の標準パッケージなど）は、ctrl-t 以外はそのまま使えます。一覧では題名だけで絞り込み、本文検索は `cch <語句>` で行います（一覧の上部にも表示します）。ctrl-t を使うには、Homebrew か [fzf のリリースページ](https://github.com/junegunn/fzf/releases)から最新版を入れてください。
+
+Linux では、削除（ctrl-x）は `gio trash`（多くのデスクトップ環境に標準で入っています）か trash-cli の `trash-put` でゴミ箱に移します。
 
 ## インストール
 
@@ -75,7 +77,7 @@ cch --version       # バージョンを表示する
 | キー | 動作 |
 |---|---|
 | Enter | 会話を再開する |
-| ctrl-t | 絞り込む対象を タイトル → 本文 → 日付 → dir の順に切り替える。本文では、打った語句を含む会話を探し直す |
+| ctrl-t | 絞り込む対象を タイトル → 本文 → 日付 → dir の順に切り替える。本文では、打った語句を含む会話を探し直す（fzf 0.58 以降） |
 | ctrl-r | 名前を変える（Esc で中止） |
 | ctrl-x | ゴミ箱に移す（Enter / y で実行、ほかのキーで中止） |
 | ctrl-s | 要約のない会話を要約する（Enter/y で直近20件、`all` と入力ですべて） |

@@ -26,14 +26,16 @@ Claude Code stores conversations per launch directory, so once you work in sever
 
 - macOS, or Linux with GNU coreutils or uutils (Ubuntu 25.10 and later). Tested in CI on Ubuntu, Debian, Fedora and Arch Linux. BusyBox-based systems such as Alpine are not supported
 - bash, perl, curl (preinstalled on macOS and most Linux distributions)
-- [fzf](https://github.com/junegunn/fzf) 0.58 or later
+- [fzf](https://github.com/junegunn/fzf) 0.38 or later; ctrl-t needs 0.58 or later
 - [jq](https://jqlang.github.io/jq/)
 - [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`)
 - [Claude Code](https://docs.claude.com/en/docs/claude-code) (the `claude` command)
 
 If fzf, jq or ripgrep is missing, cch offers to install it with Homebrew.
 
-On Linux, your distribution's fzf may be older than 0.58 (Ubuntu 24.04 and Debian 12 are); cch tells you so on launch, and the latest is on [the fzf releases page](https://github.com/junegunn/fzf/releases). Delete (ctrl-x) moves files to the Trash with `gio trash` (preinstalled on most desktops) or `trash-put` from trash-cli.
+With an fzf older than 0.58, such as the one in Ubuntu 24.04 or Debian 12, everything works except ctrl-t: only titles are filtered in the list, and content search is `cch <word>`. The list says so at the top. For ctrl-t, get the latest fzf from Homebrew or [the fzf releases page](https://github.com/junegunn/fzf/releases).
+
+On Linux, Delete (ctrl-x) moves files to the Trash with `gio trash` (preinstalled on most desktops) or `trash-put` from trash-cli.
 
 ## Installation
 
@@ -75,7 +77,7 @@ cch --version         # show the version
 | Key | Action |
 |---|---|
 | Enter | Resume the conversation |
-| ctrl-t | Cycle the filter target: title → content → date → dir. In content, the typed word searches the conversations again |
+| ctrl-t | Cycle the filter target: title → content → date → dir. In content, the typed word searches the conversations again (fzf 0.58 or later) |
 | ctrl-r | Rename (Esc to cancel) |
 | ctrl-x | Move to Trash (Enter / y to confirm, any other key cancels) |
 | ctrl-s | Summarize conversations without a summary: Enter/y for the latest 20, type `all` for all |
