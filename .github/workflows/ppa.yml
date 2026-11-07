@@ -81,10 +81,26 @@ jobs:
           printf '%s\n' "$PPA_GPG_PRIVATE_KEY" | gpg --batch --import
           key=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/ { print $10; exit }')
           version=$(sed -n 's/^CCH_VERSION="\(.*\)"/\1/p' cch)
+          ppa="https://api.launchpad.net/1.0/~nodematerial/+archive/ubuntu/cch"
           .github/scripts/ppa-series.sh | while read -r ubuntu series; do
+            deb_version="$version~ubuntu$ubuntu.1"
+            # A re-run must not upload a version Launchpad already has; it would be rejected as a duplicate
+            if curl -fsSL "$ppa?ws.op=getPublishedSources&source_name=cch&exact_match=true&version=$deb_version" \
+                | jq -e '.total_size > 0' > /dev/null; then
+              echo "$deb_version is already in the PPA"
+              continue
+            fi
             .github/scripts/ppa-source.sh "$version" "$ubuntu" "$series" out "$key"
+            # Launchpad's FTP sometimes answers 550 for a moment, so retry each upload a few times.
+            # -u skips dput's own signature check (the key is not in a trust database here);
+            # Launchpad checks the signature itself
+            for attempt in 1 2 3; do
+              dput -u "ppa:nodematerial/cch" "out/cch_${deb_version}_source.changes" && break
+              [ "$attempt" = 3 ] && exit 1
+              rm -f "out/cch_${deb_version}_source.ppa.upload"
+              sleep 30
+            done
           done
-          dput "ppa:nodematerial/cch" out/*_source.changes
       # gpg-agent keeps the key in memory after signing, and later steps (checkout's cleanup) still run here
       - name: Remove the key
         if: always()
